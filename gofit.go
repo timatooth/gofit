@@ -86,6 +86,31 @@ func (api *FitbitApi) GetActivitySteps() ActivitySteps{
   return activitySteps
 }
 
+type HeartDataPoint struct {
+  Time string `json:"dateTime"`
+  Value HeartDataValue `json:"value"`
+}
+
+type HeartDataValue struct {
+  RestingHeartRate int `json:"restingHeartRate"`
+}
+
+type ActivityHeart struct {
+  HeartData []HeartDataPoint `json:"activities-heart"`
+}
+
+func (api *FitbitApi) GetRestingHeartrate() ActivityHeart{
+  req, _ := http.NewRequest("GET", "https://api.fitbit.com/1/user/-/activities/heart/date/today/1y.json", nil)
+  req.Header.Set("Authorization", "Bearer " + api.Auth.AccessToken)
+  res, _ := http.DefaultClient.Do(req)
+  var activityHeart ActivityHeart
+  decoder := json.NewDecoder(res.Body)
+  decerr := decoder.Decode(&activityHeart)
+  if decerr != nil { panic(decerr) }
+  res.Body.Close()
+  return activityHeart
+}
+
 func (api *FitbitApi) LoadAccessToken(code string){
   form := url.Values{}
   form.Add("clientId", api.ClientId)
@@ -107,7 +132,7 @@ func (api *FitbitApi) LoadAccessToken(code string){
 }
 
 func (api *FitbitApi) loadInfluxData(){
-  fmt.Println("Loading data into influxdb...")
+  fmt.Println("Loading step data into influxdb...")
   activitySteps := api.GetActivitySteps()
 
   c, err := client.NewHTTPClient(client.HTTPConfig{
@@ -137,6 +162,40 @@ func (api *FitbitApi) loadInfluxData(){
       "steps":  v.Value,
     }
     pt, err := client.NewPoint("activity_steps", tags, fields, t1)
+    if err != nil {
+      log.Fatal(err)
+    }
+    bp.AddPoint(pt)
+  }
+
+  // Write the batch
+  if err := c.Write(bp); err != nil {
+    log.Fatal(err)
+  }
+  fmt.Println("Done loading steps")
+
+  fmt.Println("Loading heartrate data")
+  activityHeart := api.GetRestingHeartrate()
+
+  bp, err2 := client.NewBatchPoints(client.BatchPointsConfig{
+    Database:  MyDB,
+    Precision: "s",
+  })
+  if err2 != nil {
+    log.Fatal(err)
+  }
+
+  for _, v := range activityHeart.HeartData {
+    t1, e := time.Parse("2006-01-02", v.Time)
+    if e != nil {
+      log.Fatal(e)
+    }
+    fmt.Printf("%s: %dBPM \n", t1, v.Value.RestingHeartRate)
+    tags := map[string]string{"heart": "resting-heart"}
+    fields := map[string]interface{}{
+      "resting":  v.Value.RestingHeartRate,
+    }
+    pt, err := client.NewPoint("heart", tags, fields, t1)
     if err != nil {
       log.Fatal(err)
     }

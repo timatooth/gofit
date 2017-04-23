@@ -16,3 +16,6 @@ data into grafana.
     go build
     ./gofit
     # You will be prompted to visit the Fitbit authorisation grant url.
+
+### Screenshot
+![Step Data](http://i.imgur.com/MdufcMC.png)
