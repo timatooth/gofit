@@ -6,12 +6,14 @@ import (
   "bytes"
   "os"
   "strings"
+  "time"
   "io/ioutil"
   "encoding/json"
   "encoding/base64"
   "net/http"
   "net/url"
   "text/template"
+  "github.com/influxdata/influxdb/client/v2"
 )
 
 type FitbitApi struct {
@@ -20,12 +22,18 @@ type FitbitApi struct {
 }
 
 type FitbitAuth struct {
-    AccessToken string `json:"access_token"`
-    RefreshToken string `json:"refresh_token"`
-    UserId string `json:"user_id"`
-    TokenType string `json:"token_type"`
-    Scope string `json:"scope"`
-  }
+  AccessToken string `json:"access_token"`
+  RefreshToken string `json:"refresh_token"`
+  UserId string `json:"user_id"`
+  TokenType string `json:"token_type"`
+  Scope string `json:"scope"`
+}
+
+const (
+  MyDB = "mydb"
+  username = ""
+  password = ""
+)
 
 func NewFitBitApi(ClientId string, ClientSecret string, RedirectUri string) FitbitApi {
   authorizeTmpl := "response_type=code&client_id={{.ClientId}}&redirect_uri={{.RedirectUri}}&scope={{.Scopes}}&expires_in=604800"
@@ -53,7 +61,29 @@ func (api *FitbitApi) GetProfile() string{
   req.Header.Set("Authorization", "Bearer " + api.Auth.AccessToken)
   res, _ := http.DefaultClient.Do(req)
   profiledata, _:= ioutil.ReadAll(res.Body)
+  res.Body.Close()
   return string(profiledata)
+}
+
+type ActivitySteps struct {
+  Steps []DataPoint `json:"activities-steps"`
+}
+
+type DataPoint struct {
+  Time string `json:"dateTime"`
+  Value string `json:"value"`
+}
+
+func (api *FitbitApi) GetActivitySteps() ActivitySteps{
+  req, _ := http.NewRequest("GET", "https://api.fitbit.com/1/user/-/activities/steps/date/today/1y.json", nil)
+  req.Header.Set("Authorization", "Bearer " + api.Auth.AccessToken)
+  res, _ := http.DefaultClient.Do(req)
+  var activitySteps ActivitySteps
+  decoder := json.NewDecoder(res.Body)
+  decerr := decoder.Decode(&activitySteps)
+  if decerr != nil { panic(decerr) }
+  res.Body.Close()
+  return activitySteps
 }
 
 func (api *FitbitApi) LoadAccessToken(code string){
@@ -76,15 +106,60 @@ func (api *FitbitApi) LoadAccessToken(code string){
   api.Auth = auth
 }
 
+func (api *FitbitApi) loadInfluxData(){
+  fmt.Println("Loading data into influxdb...")
+  activitySteps := api.GetActivitySteps()
+
+  c, err := client.NewHTTPClient(client.HTTPConfig{
+    Addr:     "http://localhost:8086",
+    Username: username,
+    Password: password,
+  })
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+    Database:  MyDB,
+    Precision: "s",
+  })
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  for _, v := range activitySteps.Steps {
+    t1, e := time.Parse("2006-01-02", v.Time)
+    if e != nil {
+      log.Fatal(e)
+    }
+    tags := map[string]string{"steps": "steps-total"}
+    fields := map[string]interface{}{
+      "steps":  v.Value,
+    }
+    pt, err := client.NewPoint("activity_steps", tags, fields, t1)
+    if err != nil {
+      log.Fatal(err)
+    }
+    bp.AddPoint(pt)
+  }
+
+  // Write the batch
+  if err := c.Write(bp); err != nil {
+    log.Fatal(err)
+  }
+  fmt.Println("Done")
+}
+
 func main() {
   mux := http.NewServeMux()
-
   api := NewFitBitApi(os.Getenv("FITBIT_CLIENT_ID"), os.Getenv("FITBIT_CLIENT_SECRET"), "http://localhost:3000/auth")
 
   mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
     code := r.URL.Query()["code"][0]
     api.LoadAccessToken(code)
     fmt.Fprintf(w, api.GetProfile())
+
+    api.loadInfluxData()
   })
 
   mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -94,4 +169,5 @@ func main() {
 
   fmt.Println("Visit: " + api.AuthorizeUri)
   log.Fatal(http.ListenAndServe(":3000", mux))
+
 }
