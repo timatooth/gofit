@@ -1,0 +1,14 @@
+version: '2'
+
+services:
+  grafana:
+    image: grafana/grafana:4.2.0
+    ports:
+      - '3000:3000'
+    links:
+      - influxdb
+
+  influxdb:
+    image: influxdb:1.2.2-alpine
+    ports:
+      - '8086:8086'

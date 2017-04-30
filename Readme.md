@@ -1,13 +1,13 @@
 # Gofit
 
-Uses the Fitbit API to load data into a TSDB like Prometheus for displaying
+Uses the Fitbit API to load data into InfluxDB for displaying
 data into grafana.
 
 ## Requirements
 * Go 1.8
 * Fitbit API App ID/Secret (You need to request your own personal App keys in Fitbit dashboard)
-* Prometheus (soon)
-* Grafana (soon)
+* InfluxDB 1.2
+* Grafana 4.2
 
 ## Running
 
