@@ -87,7 +87,7 @@ func (api *FitbitApi) GetActivitySteps() ActivitySteps{
 }
 
 type HeartDataPoint struct {
-  Time string `json:"dateTime"`
+  Date string `json:"dateTime"`
   Value HeartDataValue `json:"value"`
 }
 
@@ -109,6 +109,50 @@ func (api *FitbitApi) GetRestingHeartrate() ActivityHeart{
   if decerr != nil { panic(decerr) }
   res.Body.Close()
   return activityHeart
+}
+
+type HeartateIntradayPoint struct {
+  Time string `json:"time"`
+  Value int `json:"value"`
+}
+
+type HeartIntraday struct {
+  Dataset []HeartateIntradayPoint `json:"dataset"`
+  DatasetInterval int `json:"DatasetInterval"`
+  DatasetType string `json:"datasetType"`
+}
+type ActivityHeartSeries struct {
+  HeartData []HeartDataPoint `json:"activities-heart"`
+  HeartIntraday HeartIntraday `json:"activities-heart-intraday"`
+}
+
+type NormalisedHeartPoint struct {
+  Timestamp time.Time
+  Value int
+}
+
+func (series *ActivityHeartSeries) GetNormalisedSeries(timezone string) []NormalisedHeartPoint {
+  loc, _ := time.LoadLocation(timezone)
+  var points []NormalisedHeartPoint
+  format := "2006-01-02 15:04:05"
+  for _, datapoint := range series.HeartIntraday.Dataset {
+    timestamp, e := time.ParseInLocation(format, series.HeartData[0].Date + " " + datapoint.Time, loc)
+    if(e != nil){panic(e)}
+    points = append(points, NormalisedHeartPoint{Timestamp: timestamp, Value: datapoint.Value})
+  }
+
+  return points
+}
+
+func (api *FitbitApi) GetHeartrateTimeSeries(date string) ActivityHeartSeries {
+  req, _ := http.NewRequest("GET", "https://api.fitbit.com/1/user/-/activities/heart/date/"+date+"/1d/1sec.json", nil)
+  req.Header.Set("Authorization", "Bearer " + api.Auth.AccessToken)
+  res, _ := http.DefaultClient.Do(req)
+  var series ActivityHeartSeries
+  dec := json.NewDecoder(res.Body)
+  decerr := dec.Decode(&series)
+  if(decerr != nil) { panic(decerr) }
+  return series
 }
 
 func (api *FitbitApi) LoadAccessToken(code string){
@@ -174,7 +218,7 @@ func (api *FitbitApi) loadInfluxData(){
   }
   fmt.Println("Done loading steps")
 
-  fmt.Println("Loading heartrate data")
+  fmt.Println("Loading resting heartrate data")
   activityHeart := api.GetRestingHeartrate()
 
   bp, err2 := client.NewBatchPoints(client.BatchPointsConfig{
@@ -186,11 +230,10 @@ func (api *FitbitApi) loadInfluxData(){
   }
 
   for _, v := range activityHeart.HeartData {
-    t1, e := time.Parse("2006-01-02", v.Time)
+    t1, e := time.Parse("2006-01-02", v.Date)
     if e != nil {
       log.Fatal(e)
     }
-    fmt.Printf("%s: %dBPM \n", t1, v.Value.RestingHeartRate)
     tags := map[string]string{"heart": "resting-heart"}
     fields := map[string]interface{}{
       "resting":  v.Value.RestingHeartRate,
@@ -205,6 +248,38 @@ func (api *FitbitApi) loadInfluxData(){
   // Write the batch
   if err := c.Write(bp); err != nil {
     log.Fatal(err)
+  }
+  fmt.Println("Done")
+
+  fmt.Println("Loading 30 days of 1s intraday heartrate data...")
+  //Get Heart Rate Intraday Time Series
+  now := time.Now()
+  for i := 0; i < 30; i++ {
+    dateString := now.AddDate(0, 0, -i).Format("2006-01-02")
+    fmt.Printf("Loading: %s\n", dateString)
+    series := api.GetHeartrateTimeSeries(dateString)
+
+    bp, _ = client.NewBatchPoints(client.BatchPointsConfig{
+      Database:  MyDB,
+      Precision: "s",
+    })
+
+    for _, point := range series.GetNormalisedSeries("Pacific/Auckland") {
+      tags := map[string]string{"heart": "intraday-heart"}
+      fields := map[string]interface{}{
+        "rate":  point.Value,
+      }
+      pt, err := client.NewPoint("heart-intraday", tags, fields, point.Timestamp)
+      if err != nil {
+        log.Fatal(err)
+      }
+      bp.AddPoint(pt)
+    }
+
+    // Write the batch
+    if err := c.Write(bp); err != nil {
+      log.Fatal(err)
+    }
   }
   fmt.Println("Done")
 }
