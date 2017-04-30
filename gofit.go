@@ -211,7 +211,7 @@ func (api *FitbitApi) loadInfluxData(){
 
 func main() {
   mux := http.NewServeMux()
-  api := NewFitBitApi(os.Getenv("FITBIT_CLIENT_ID"), os.Getenv("FITBIT_CLIENT_SECRET"), "http://localhost:3000/auth")
+  api := NewFitBitApi(os.Getenv("FITBIT_CLIENT_ID"), os.Getenv("FITBIT_CLIENT_SECRET"), "http://localhost:4000/auth")
 
   mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
     code := r.URL.Query()["code"][0]
@@ -227,6 +227,6 @@ func main() {
   })
 
   fmt.Println("Visit: " + api.AuthorizeUri)
-  log.Fatal(http.ListenAndServe(":3000", mux))
+  log.Fatal(http.ListenAndServe(":4000", mux))
 
 }
