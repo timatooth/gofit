@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e -u -x
+
+export GOPATH=$PWD
+mkdir -p src/github.com/timatooth/
+cp -R ./gofit src/github.com/timatooth/
+cd src/github.com/timatooth/gofit
+go get ./...
+go build -o built-project/gofit ./gofit.go
