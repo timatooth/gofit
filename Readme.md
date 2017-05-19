@@ -1,13 +1,15 @@
 # Gofit
+> Uses the Fitbit API to load data into InfluxDB for displaying data into Grafana for FitOps engineers.
 
-Uses the Fitbit API to load data into InfluxDB for displaying
-data into grafana.
-
-## Requirements
+### Requirements
 * Go 1.8
-* Fitbit API App ID/Secret (You need to request your own personal App keys in Fitbit dashboard)
+* Fitbit API App ID/Secret (You need to request your own personal App keys in the Fitbit dashboard)
 * InfluxDB 1.2
 * Grafana 4.2
+
+##### Todo
+* Use the Fitbit subscriptions API to send metrics in near-realtime when a fitness tracker syncs with Fitbit Servers.
+* Prometheus Fitbit exporter.
 
 ## Running
 
@@ -19,3 +21,6 @@ data into grafana.
 
 ### Screenshot
 ![Step Data](http://i.imgur.com/MdufcMC.png)
+
+### Grafana
+Dashboards json exports included for importing into Grafana inside `grafana/`.
