@@ -1,14 +1,21 @@
-version: '2'
+version: '3'
+
+volumes:
+  grafanavolume:
+  influxdbvolume:
 
 services:
   grafana:
-    image: grafana/grafana:4.2.0
+    image: grafana/grafana:4.3.2
     ports:
       - '3000:3000'
     links:
       - influxdb
-
+    volumes:
+      - grafanavolume:/var/lib/grafana
   influxdb:
-    image: influxdb:1.2.2-alpine
+    image: influxdb:1.2.4-alpine
     ports:
       - '8086:8086'
+    volumes:
+      - influxdbvolume:/var/lib/influxdb
