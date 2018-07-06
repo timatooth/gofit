@@ -7,21 +7,29 @@ import (
 	"os"
 	"time"
 
+	client "github.com/influxdata/influxdb/client/v2"
 	"github.com/timatooth/gofit/fitbitapi"
 )
 
-const (
-	InfluxDatabaseName = "fitbit"
-	InfluxUsername     = ""
-	InfluxPassword     = ""
-)
-
 func loadInfluxData(api *fitbitapi.Api) {
+	var (
+		InfluxHostname     = os.Getenv("INFLUX_HOSTNAME")
+		InfluxDatabaseName = os.Getenv("INFLUX_DB")
+		InfluxUsername     = os.Getenv("INFLUX_USERNAME")
+		InfluxPassword     = os.Getenv("INFLUX_PASSWORD")
+	)
+	if InfluxHostname == "" {
+		InfluxHostname = "http://localhost:8086"
+	}
+	if InfluxDatabaseName == "" {
+		InfluxDatabaseName = "fitbit"
+	}
+
 	fmt.Println("Loading step data into influxdb...")
 	activitySteps := api.GetActivitySteps()
 
 	c, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr:     "http://localhost:8086",
+		Addr:     InfluxHostname,
 		Username: InfluxUsername,
 		Password: InfluxPassword,
 	})
