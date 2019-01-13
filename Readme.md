@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/timatooth/gofit.svg?branch=master)](https://travis-ci.org/timatooth/gofit)
 
 ### Requirements
-* Go 1.8+
+* Go 1.11+
 * Fitbit API App ID/Secret (You need to request your own personal App keys in the Fitbit dashboard)
 * InfluxDB 1.2
 * Grafana 4.2+
